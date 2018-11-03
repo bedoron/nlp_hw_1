@@ -75,9 +75,10 @@ def load(filename_output, transformed_by_speaker):
 
         root.append(doc)
 
-    with open(filename_output, 'w') as fd:
-        xml_data = et.tostring(root, encoding='unicode', method='text')
-        fd.write(xml_data)
+    et.ElementTree(root).write(filename_output, encoding='unicode')
+    # with open(filename_output, 'w') as fd:
+    #     xml_data = et.tostring(root, encoding='unicode', method='text')
+    #     fd.write(xml_data)
 
     return True
 
