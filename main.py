@@ -122,11 +122,7 @@ def load(filename_output, transformed_by_speaker):
 
         root.append(doc)
 
-    xml_str = minidom.parseString(et.tostring(root, encoding='unicode', method='xml')).toprettyxml(indent='    ')
-    xml_str = xml_str[xml_str.find("?>") + 3:]  # Get rid of xml header
-    with open(filename_output, 'wb') as f:
-        f.write(xml_str.encode('utf-16'))
-
+    et.ElementTree(root).write(filename_output, encoding='unicode', method='xml')
     return True
 
 
