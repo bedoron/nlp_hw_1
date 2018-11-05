@@ -3,7 +3,6 @@ import re
 import sys
 import xml.etree as et
 from xml.etree import ElementTree as et
-from xml.dom import minidom
 import os
 from collections import defaultdict
 from typing import List, Mapping
@@ -84,7 +83,7 @@ def transform_paragraphs(speaker: str, paragraphs: List[et.Element]) -> str:
 
     # Now, split <letter>;<space>
     clean_sentences = itertools.chain.from_iterable(
-        map(lambda sentence: re.split('(?=\S;)\s', sentence), clean_sentences))
+        map(lambda sentence: re.split('(?<=\w;)\s', sentence), clean_sentences))
 
     # Get rid of (-\s+){2,} at the end and the beginning
     clean_sentences = map(
@@ -96,6 +95,17 @@ def transform_paragraphs(speaker: str, paragraphs: List[et.Element]) -> str:
 
     # Get rid of empty sentences
     clean_sentences = filter(lambda paragraph: len(paragraph) != 0, clean_sentences)
+
+    # Hypens of all types got seperated, we need to "reconnect" words with regular 45 hypens
+    clean_sentences = map(lambda sentence: re.sub(' - ', '-', sentence), clean_sentences)
+
+    # Add space to ':'
+    clean_sentences = map(lambda sentence: re.sub('(?<=\D)([?,;.])(?=\s|$)', r' \1', sentence, flags=re.UNICODE),
+                          clean_sentences)
+
+    # number relation letters should be tokenized me-15 -> me - 15
+    clean_sentences = map(lambda sentence: re.sub(r'(?<=\b\D)-(\d+)', r' - \1', sentence, flags=re.UNICODE),
+                          clean_sentences)
 
     clean_sentences = list(clean_sentences)  # Unwind filters
     return "\n".join(clean_sentences)
@@ -122,7 +132,7 @@ def load(filename_output, transformed_by_speaker):
 
         root.append(doc)
 
-    et.ElementTree(root).write(filename_output, encoding='unicode', method='xml')
+    et.ElementTree(root).write(filename_output, encoding='unicode')
     return True
 
 
@@ -131,7 +141,7 @@ def main(argv):
     filename_output = argv[2]
 
     source = os.path.join(dirname_input, 'word', 'document.xml')
-    tree = et.parse(source)
+    tree = et.parse(os.path.abspath(source))
     result = extract(tree)
     result = transform(result)
     result = load(filename_output, result)
