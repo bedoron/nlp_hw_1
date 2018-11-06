@@ -64,10 +64,39 @@ def extract(tree: et.ElementTree):
     return speakers
 
 
-def transform_paragraphs(speaker: str, paragraphs: List[et.Element]) -> str:
-    text_paragraphs = [extract_text(paragraph) for paragraph in paragraphs]
+def tokenize_word(current_word: str, state='middle') -> List[str]:
+    result = [current_word]
+    if len(current_word) == 1:
+        return result
 
-    # Normalize - replace weird hypes with regular ones
+    if state == 'start':
+        if re.match('^\d+\.$', current_word, flags=re.UNICODE) is not None:
+            return result
+
+    if re.match('^.+?[?!:,' + ('.' if state == 'end' else '') + ']$', current_word) is not None:
+        result = [current_word[:-1], current_word[-1]]
+
+    result = itertools.chain.from_iterable(
+        [[almost_token] if re.match('^\w".+"$', almost_token) is None else [almost_token[0], almost_token[1:]] for
+         almost_token in result])
+
+    return list(result)
+
+
+def tokenize_sentence(sentence: str) -> str:
+    tokens = []
+    state = 'start'
+    words = sentence.split(' ')
+    for idx, word in enumerate(words):
+        state = 'end' if idx == (len(words) - 1) else state
+        tokens += tokenize_word(word, state)
+        state = 'middle'
+
+    return " ".join(tokens)
+
+
+def transform_paragraphs(speaker: str, text_paragraphs: List[str]) -> str:
+    # Normalize/pre-process - replace weird hypes with regular ones
     # clean_paragraphs = map(lambda paragraph: paragraph.replace("\u2013", chr(45)), text_paragraphs)
     # Remove '- - -' (Abrupt stop)
     clean_paragraphs = map(lambda paragraph: re.sub('\u2013\s+\u2013\s+\u2013', '', paragraph, flags=re.UNICODE),
@@ -79,7 +108,7 @@ def transform_paragraphs(speaker: str, paragraphs: List[et.Element]) -> str:
     # The followind exepciton are made:
     #  enumeration, ie. 1. <some text>
     clean_sentences = itertools.chain.from_iterable(
-        map(lambda paragraph: re.split('(?<=\S\D\.)\s', paragraph), clean_paragraphs))
+        map(lambda paragraph: re.split('(?<=(?!^\d)\w[.?!])\s', paragraph, flags=re.UNICODE), clean_paragraphs))
 
     # Now, split <letter>;<space>
     clean_sentences = itertools.chain.from_iterable(
@@ -99,20 +128,25 @@ def transform_paragraphs(speaker: str, paragraphs: List[et.Element]) -> str:
     # Hypens of all types got seperated, we need to "reconnect" words with regular 45 hypens
     clean_sentences = map(lambda sentence: re.sub(' - ', '-', sentence), clean_sentences)
 
-    # Add space to ':'
-    clean_sentences = map(lambda sentence: re.sub('(?<=\D)([?,;.])(?=\s|$)', r' \1', sentence, flags=re.UNICODE),
-                          clean_sentences)
-
     # number relation letters should be tokenized me-15 -> me - 15
     clean_sentences = map(lambda sentence: re.sub(r'(?<=\b\D)-(\d+)', r' - \1', sentence, flags=re.UNICODE),
                           clean_sentences)
 
     clean_sentences = list(clean_sentences)  # Unwind filters
-    return "\n".join(clean_sentences)
+    tokenized_sentences = []
+    for sentence in clean_sentences:
+        tokenized_sentence = tokenize_sentence(sentence)
+        tokenized_sentences.append(tokenized_sentence)
+
+    return "\n".join(tokenized_sentences)
 
 
 def transform(extracted_by_speaker: Mapping[str, List[et.Element]]) -> Mapping[str, str]:
-    return {speaker: transform_paragraphs(speaker, paragraphs) for (speaker, paragraphs) in
+    def speaker_paragraphs_handler(s, ps):
+        texts = [extract_text(paragraph) for paragraph in ps]
+        return transform_paragraphs(s, texts)
+
+    return {re.sub('\s{2,}', ' ', speaker): speaker_paragraphs_handler(speaker, paragraphs) for (speaker, paragraphs) in
             extracted_by_speaker.items()}
 
 
