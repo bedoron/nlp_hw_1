@@ -18,17 +18,25 @@ def is_subject_bookmark(paragraph: et.Element):
     return True
 
 
+def has_style(paragraph: et.Element, style=None):
+    x_path = 'w:pPr//w:pStyle' if style is None else 'w:pPr//w:pStyle[@{http://schemas.openxmlformats.org' \
+                                                     '/wordprocessingml/2006/main}val="' + \
+                                                     str(style) + '"]'
+
+    style_val = paragraph.find(x_path, namespaces=WORD_NS)
+    return style_val is not None
+
+
 def is_speaker(paragraph: et.Element):
-    speaker_val = paragraph.find(
-        'w:pPr//w:pStyle[@{http://schemas.openxmlformats.org/wordprocessingml/2006/main}val="a4"]', namespaces=WORD_NS)
-    return speaker_val is not None
+    return has_style(paragraph, 'a4')
+
+
+def is_speaker_remark(paragraph: et.Element):
+    return has_style(paragraph, 'a5')
 
 
 def is_styled(paragraph: et.Element):
-    style_val = paragraph.find(
-        'w:pPr//w:pStyle', namespaces=WORD_NS)
-
-    return style_val is not None
+    return has_style(paragraph)
 
 
 def extract_text(paragraph: et.Element, delimiter=" "):
@@ -52,6 +60,9 @@ def extract(tree: et.ElementTree):
         if speaker is None:
             continue
 
+        if is_speaker_remark(paragraph):
+            continue
+
         if is_styled(paragraph):
             speaker = None
             continue
@@ -65,22 +76,64 @@ def extract(tree: et.ElementTree):
 
 
 def tokenize_word(current_word: str, state='middle') -> List[str]:
-    result = [current_word]
+    tokens = tokenize_word_reversed(current_word, state)
+    tokens.reverse()
+    return tokens
+
+
+def tokenize_word_reversed(current_word: str, state='middle') -> List[str]:
     if len(current_word) == 1:
-        return result
+        return [current_word]
 
-    if state == 'start':
-        if re.match('^\d+\.$', current_word, flags=re.UNICODE) is not None:
-            return result
+    tokens = []
 
-    if re.match('^.+?[?!:,' + ('.' if state == 'end' else '') + ']$', current_word) is not None:
-        result = [current_word[:-1], current_word[-1]]
+    # End of sentence tokens should be tokenized away
+    if state == 'end' and re.match('^.*?[?!.;]$', current_word) is not None:
+        tokens.append(current_word[-1])
+        current_word = current_word[:-1]
 
-    result = itertools.chain.from_iterable(
-        [[almost_token] if re.match('^\w".+"$', almost_token) is None else [almost_token[0], almost_token[1:]] for
-         almost_token in result])
+    if len(current_word) == 0:
+        return tokens
 
-    return list(result)
+    # Handle comma or : - we assume that the following constructs are invalid: ,:  :,
+    if current_word.endswith(',') or current_word.endswith(':'):
+        tokens.append(current_word[-1])
+        current_word = current_word[:-1]
+
+    if len(current_word) == 0:
+        return tokens
+
+    # Get rid of ) or " from end of word if exists
+    token_matcher = re.match('^.*?([")]+)$', current_word)
+    if token_matcher is not None:
+        symbols_str = token_matcher.group(1)
+        symbols = list(symbols_str)
+        symbols.reverse()
+        tokens += symbols
+
+        current_word = current_word[:-len(symbols_str)]
+
+    if len(current_word) == 0:
+        return tokens
+
+    # Tokenize forms of ha"bla or be(ble away
+    token_matcher = re.match('^(\w)?([("]+)(.*)$', current_word)
+    if token_matcher is not None:
+        tokens.append(token_matcher.group(3))
+        symbols = list(token_matcher.group(2))
+        symbols.reverse()
+        tokens += symbols
+
+        if token_matcher.group(1):
+            tokens.append(token_matcher.group(1))
+
+        current_word = ''
+
+    if len(current_word) == 0:
+        return tokens
+
+    tokens.append(current_word)
+    return tokens
 
 
 def tokenize_sentence(sentence: str) -> str:

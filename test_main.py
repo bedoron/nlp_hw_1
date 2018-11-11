@@ -74,3 +74,23 @@ class TestTokenization(unittest.TestCase):
 
         result = transform_paragraphs("Monkey", [text])
         self.assertEqual(expected, result)
+
+    def test_quoted_text_tokenization(self):
+        text = 'לבנות את ה"פתח-לנד" ולפעול'
+        expected = 'לבנות את ה " פתח-לנד " ולפעול'
+        result = transform_paragraphs("Monkey", [text])
+        self.assertEqual(expected, result)
+
+    def test_paranthesis(self):
+        text = 'איזה קטע (יש פה "סוגריים") עובד.'
+        expected = 'איזה קטע ( יש פה " סוגריים " ) עובד .'
+        result = transform_paragraphs("Monkey", [text])
+        self.assertEqual(expected, result)
+
+    def test_paranthesis_with_numbers_and_question(self):
+        text = "טובין (תיקון מס' 27) מי נגד"
+        expected = "טובין ( תיקון מס' 27 ) מי נגד"
+        result = transform_paragraphs("Monkey", [text])
+        self.assertEqual(expected, result)
+
+
