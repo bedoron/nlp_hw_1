@@ -167,9 +167,9 @@ def transform_paragraphs(speaker: str, text_paragraphs: List[str]) -> str:
     clean_sentences = itertools.chain.from_iterable(
         map(lambda sentence: re.split('(?<=\w;)\s', sentence), clean_sentences))
 
-    # Get rid of (-\s+){2,} at the end and the beginning
+    # Get rid of (-\s+){2,} at the end and the beginning, also - some file has _ _ _ in it, a mistake ?
     clean_sentences = map(
-        lambda sentence: re.sub('((\s+\u2013){2,}$|^(\u2013\s+){2,})', '', sentence, flags=re.UNICODE),
+        lambda sentence: re.sub('((\s+\u2013){2,}$|^(\u2013\s+){2,}|(_\s+){2}_)', '', sentence, flags=re.UNICODE),
         clean_sentences)
 
     # trim spaces

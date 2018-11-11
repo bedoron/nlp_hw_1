@@ -93,4 +93,9 @@ class TestTokenization(unittest.TestCase):
         result = transform_paragraphs("Monkey", [text])
         self.assertEqual(expected, result)
 
+    def test_complex_paranthesis(self):
+        text = """(נישואין וגירושין) (תיקון – הוראת הרחקה – סמכויות בית-משפט מחוזי), התשנ"ג–1993, לדיון מוקדם, מס' תר"נ."""
+        expected = """( נישואין וגירושין ) ( תיקון – הוראת הרחקה – סמכויות בית-משפט מחוזי ) , התשנ"ג–1993 , לדיון מוקדם , מס' תר"נ ."""
+        result = transform_paragraphs("Monkey", [text])
+        self.assertEqual(expected, result)
 
