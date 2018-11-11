@@ -1,5 +1,5 @@
 import unittest
-from main import tokenize_word, tokenize_sentence, transform_paragraphs
+from hw1 import tokenize_word, tokenize_sentence, transform_paragraphs
 
 
 class TestTokenization(unittest.TestCase):
