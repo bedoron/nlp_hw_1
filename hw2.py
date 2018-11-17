@@ -154,11 +154,22 @@ def build_xgram_matrix(speakers_to_speeches, gram=2):
     corpus = " ".join(speakers_to_speeches.values())
     tokens = re.split('\s+', corpus)
     xgram_mtarix = defaultdict(lambda: defaultdict(int))
+    total_xgrams = 0
     for xgram in window(tokens, gram):
         key_tuple = tuple(xgram[i] for i in range(len(xgram) - 1))
         xgram_mtarix[key_tuple][str(xgram[-1])] += 1
+        total_xgrams += 1
 
-    return xgram_mtarix
+    return xgram_mtarix, total_xgrams
+
+
+def build_xgrams(xgram_matrix: Dict[tuple, Dict[str, int]], total_tokens: int):
+    xgram_freq_mtarix = defaultdict(lambda: defaultdict(float))
+    for aprior, posteriors in xgram_matrix.items():
+        for posterior, freq in posteriors.items():
+            xgram_freq_mtarix[aprior][posterior] = freq / total_tokens # WRONG! should be line sum (?!)
+
+    return xgram_freq_mtarix
 
 
 def main(argv):
@@ -173,8 +184,11 @@ def main(argv):
     sentence = generate_sentences(population, distribution, 15, 3)
     print("\n".join(sentence))
 
-    # bigramm = build_bigram_matrix(speakers_to_speeches)
-    xgramm = build_xgram_matrix(speakers_to_speeches, gram=3)
+    # Build bigrams
+    xgramm, xgramt = build_xgram_matrix(speakers_to_speeches, gram=2)
+    xgrams = build_xgrams(xgramm, xgramt)
+
+
 
     for key, val in xgramm.items():
         print("key[", key, "]", val)
