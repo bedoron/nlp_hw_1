@@ -214,7 +214,7 @@ def main(argv):
     population, distribution = zip(*unigrams.items())
 
     sentence = generate_sentences(population, distribution, 15, 3)
-    print("\n".join(sentence))
+    print("\t"+"\n\t".join(sentence))
 
     # Build bigrams
     print("Building bigram matrix")
@@ -233,6 +233,7 @@ def main(argv):
     txgramm, txgramac = build_xgram_matrix(tokenized_text_array, gram=3)
     txgrams = build_xgrams(txgramm, txgramac)
 
+    # Backoff ? smoothing? Which ?
     print("Generated from trigram:")
     for _ in range(10):
         generated_from_trigram = generate_sentence_from_trigram(txgrams, xgrams)
