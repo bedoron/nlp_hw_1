@@ -7,7 +7,7 @@ import re
 import sys
 from collections import defaultdict
 import xml.etree as et
-from typing import Dict
+from typing import Dict, List
 from xml.etree import ElementTree as et
 from functools import wraps
 
@@ -93,17 +93,22 @@ def calculate_probability(unigrams: Dict[str, int], sentence: str):
     return sentence_probability
 
 
+def sample_word(population, distribution, sentence: List[str]):
+    predicted = random.choices(population=population, weights=distribution, k=1)[0]
+    if predicted == SENTENCE_START:
+        return 0
+
+    sentence.append(predicted)
+    return 1 if predicted != SENTENCE_END else -1
+
+
 def generate_sentence(population, distribution, length):
     sentence = []
     for word in range(length):
-        predicted = random.choices(population=population, weights=distribution, k=1)[0]
-        if predicted == SENTENCE_START:
-            continue
+        changed = sample_word(population, distribution, sentence)
 
-        if predicted == SENTENCE_END:
+        if changed == -1:
             break
-
-        sentence.append(predicted)
 
     return " ".join(sentence) if sentence else ''
 
@@ -150,26 +155,53 @@ def build_bigram_matrix(speakers_to_speeches):
     return bigram_matrix
 
 
-def build_xgram_matrix(speakers_to_speeches, gram=2):
-    corpus = " ".join(speakers_to_speeches.values())
-    tokens = re.split('\s+', corpus)
+def build_xgram_matrix(tokenized_text_array: List[str], gram=2):
     xgram_mtarix = defaultdict(lambda: defaultdict(int))
-    total_xgrams = 0
-    for xgram in window(tokens, gram):
+    xgram_apprior_count = defaultdict(int)
+    for xgram in window(tokenized_text_array, gram):
         key_tuple = tuple(xgram[i] for i in range(len(xgram) - 1))
         xgram_mtarix[key_tuple][str(xgram[-1])] += 1
-        total_xgrams += 1
+        xgram_apprior_count[key_tuple] += 1
 
-    return xgram_mtarix, total_xgrams
+    return xgram_mtarix, xgram_apprior_count
 
 
-def build_xgrams(xgram_matrix: Dict[tuple, Dict[str, int]], total_tokens: int):
+def build_xgrams(xgram_matrix: Dict[tuple, Dict[str, int]], xgram_apprior_count: Dict[tuple, int]):
     xgram_freq_mtarix = defaultdict(lambda: defaultdict(float))
     for aprior, posteriors in xgram_matrix.items():
+        total_apriors = xgram_apprior_count[aprior]
         for posterior, freq in posteriors.items():
-            xgram_freq_mtarix[aprior][posterior] = freq / total_tokens # WRONG! should be line sum (?!)
+            xgram_freq_mtarix[aprior][posterior] = freq / total_apriors  # WRONG! should be line sum (?!)
 
     return xgram_freq_mtarix
+
+
+def generate_sentence_from_xgram(xgrams: Dict[tuple, Dict[str, float]], gram = 2, *start_conditions):
+    sentence = []
+    sentence += start_conditions if start_conditions else [SENTENCE_START]
+    while True:
+        last_token = tuple(sentence[-gram+1:])
+        last_token_xgrams = xgrams[last_token]
+        if not last_token_xgrams:
+            continue
+
+        population, distribution = zip(*last_token_xgrams.items())
+        changed = sample_word(population, distribution, sentence)
+        if changed == -1:
+            break
+
+    return " ".join(sentence)
+
+
+def generate_sentence_from_trigram(txgrams, bxgrams):
+    # Generate starting conditions for trigram out of bgram
+    while True:
+        bigram_sentence = generate_sentence_from_xgram(bxgrams).split()
+        if len(bigram_sentence) > 1:
+            break
+
+    sentence = generate_sentence_from_xgram(txgrams, 3, *bigram_sentence[:2])
+    return sentence
 
 
 def main(argv):
@@ -185,15 +217,26 @@ def main(argv):
     print("\n".join(sentence))
 
     # Build bigrams
-    xgramm, xgramt = build_xgram_matrix(speakers_to_speeches, gram=2)
-    xgrams = build_xgrams(xgramm, xgramt)
+    print("Building bigram matrix")
+    corpus = " ".join(speakers_to_speeches.values())
+    tokenized_text_array = re.split('\s+', corpus)
+    xgramm, xgramac = build_xgram_matrix(tokenized_text_array, gram=2)
+    xgrams = build_xgrams(xgramm, xgramac)
 
+    print("Generated from bigram:")
+    for _ in range(10):
+        generated_from_bigram = generate_sentence_from_xgram(xgrams)
+        print("\t" + generated_from_bigram)
 
+    # Build threegrams
+    print("Building trigram matrix")
+    txgramm, txgramac = build_xgram_matrix(tokenized_text_array, gram=3)
+    txgrams = build_xgrams(txgramm, txgramac)
 
-    for key, val in xgramm.items():
-        print("key[", key, "]", val)
-
-    pass
+    print("Generated from trigram:")
+    for _ in range(10):
+        generated_from_trigram = generate_sentence_from_trigram(txgrams, xgrams)
+        print("\t" + generated_from_trigram)
 
 
 if __name__ == "__main__":
