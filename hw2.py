@@ -145,16 +145,6 @@ def window(seq, n=2):
         yield win
 
 
-def build_bigram_matrix(speakers_to_speeches):
-    corpus = " ".join(speakers_to_speeches.values())
-    tokens = re.split('\s+', corpus)
-    bigram_matrix = defaultdict(lambda: defaultdict(int))
-    for bigram in window(tokens):
-        bigram_matrix[(bigram[0],)][bigram[1]] += 1
-
-    return bigram_matrix
-
-
 def build_xgram_matrix(tokenized_text_array: List[str], gram=2):
     xgram_mtarix = defaultdict(lambda: defaultdict(int))
     xgram_apprior_count = defaultdict(int)
@@ -171,16 +161,17 @@ def build_xgrams(xgram_matrix: Dict[tuple, Dict[str, int]], xgram_apprior_count:
     for aprior, posteriors in xgram_matrix.items():
         total_apriors = xgram_apprior_count[aprior]
         for posterior, freq in posteriors.items():
-            xgram_freq_mtarix[aprior][posterior] = freq / total_apriors  # WRONG! should be line sum (?!)
+            xgram_freq_mtarix[aprior][posterior] = freq / total_apriors
 
     return xgram_freq_mtarix
 
 
-def generate_sentence_from_xgram(xgrams: Dict[tuple, Dict[str, float]], gram = 2, *start_conditions):
+def generate_sentence_from_xgram(xgrams: Dict[tuple, Dict[str, float]], *start_conditions):
     sentence = []
     sentence += start_conditions if start_conditions else [SENTENCE_START]
+    gram = len(sentence)
     while True:
-        last_token = tuple(sentence[-gram+1:])
+        last_token = tuple(sentence[-gram + 1:])
         last_token_xgrams = xgrams[last_token]
         if not last_token_xgrams:
             continue
@@ -201,6 +192,7 @@ def generate_sentence_from_trigram(txgrams, bxgrams):
             break
 
     sentence = generate_sentence_from_xgram(txgrams, 3, *bigram_sentence[:2])
+    # sentence = generate_sentence_from_xgram(txgrams, SENTENCE_START, SENTENCE_START)
     return sentence
 
 
@@ -214,7 +206,7 @@ def main(argv):
     population, distribution = zip(*unigrams.items())
 
     sentence = generate_sentences(population, distribution, 15, 3)
-    print("\t"+"\n\t".join(sentence))
+    print("\t" + "\n\t".join(sentence))
 
     # Build bigrams
     print("Building bigram matrix")
