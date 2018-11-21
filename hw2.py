@@ -193,15 +193,7 @@ def generate_sentence_from_xgram(xgrams: Dict[tuple, Dict[str, float]], *start_c
 def main(argv):
     print("Reading merged file.")
     speakers_to_speeches = extract_to_map(os.path.join('resources', 'merged.xml'))
-    # token_counter, total_tokens = count_token_freq(speakers_to_speeches)
-    # unigrams = build_unigrams(token_counter, total_tokens)
-    #
-    # print_sentences_probabilities(unigrams)
-    #
-    # population, distribution = zip(*unigrams.items())
-    #
-    # sentence = generate_sentences(population, distribution, 15, 3)
-    # print("\t" + "\n\t".join(sentence))
+
     print("Splitting tokens and sanitizing them.")
     corpus = " ".join(speakers_to_speeches.values())
     tokenized_text_array = re.split('\s+', corpus)
