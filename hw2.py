@@ -1,19 +1,25 @@
-import json
+import math
 import math
 import os
 import pickle
 import random
 import re
 import sys
-from collections import defaultdict
 import xml.etree as et
-from typing import Dict, List
-from xml.etree import ElementTree as et
+from collections import defaultdict
 from functools import wraps
+from typing import Dict, List, Union
+from xml.etree import ElementTree as et
+import logging
 
-SENTENCE_START = '<SOS>'
-SENTENCE_END = '<EOS>'
+logging.basicConfig(format='%(message)s')
 
+CHANGE_WATCHDOG_THRESHOLD = 10
+SENTENCE_START_TOKEN = '<SOS>'
+SENTENCE_END_TOKEN = '<EOS>'
+
+def FILTER_SPECIAL_TOKENS(sentence):
+    return re.sub('\b?(' + re.escape(SENTENCE_START_TOKEN) + '|' + re.escape(SENTENCE_END_TOKEN) + ')\b?', '', sentence)
 
 # TODO: Remove caching before submission
 def with_cache(func):
@@ -41,18 +47,19 @@ def extract_to_map(speaker_file):
         text = doc[1].text
         speaker = doc[0].text
         if text is None:
-            print('Speaker', speaker, 'Had nothing to say')
+            logging.warning('Speaker "{}" had nothing to say', speaker)
             continue
 
         # Add start/end of sentence tokens
-        text = "\n".join(["{} {} {}".format(SENTENCE_START, word, SENTENCE_END) for word in text.split("\n")])
+        text = "\n".join(
+            ["{} {} {}".format(SENTENCE_START_TOKEN, word, SENTENCE_END_TOKEN) for word in text.split("\n")])
 
         speaker_to_speeches[speaker] = text
 
     return speaker_to_speeches
 
 
-def build_unigram_model(corpus: List[str]):
+def build_unigram_model(corpus: List[str]) -> Dict[str, float]:
     counter = defaultdict(int)
     for token in corpus:
         counter[token] += 1
@@ -80,41 +87,19 @@ def calculate_probability(unigrams: Dict[str, int], sentence: str):
 
 def sample_word(population, distribution, sentence: List[str]):
     predicted = random.choices(population=population, weights=distribution, k=1)[0]
-    if predicted == SENTENCE_START:
-        return 0
-
     sentence.append(predicted)
-    return 1 if predicted != SENTENCE_END else -1
+
+    return predicted == SENTENCE_END_TOKEN
 
 
 def generate_sentence_from_unigram(xgrams: Dict[tuple, float]):
     sentence = []
     population, values = zip(*xgrams.items())
-    while True:
-        changed = sample_word(population=population, distribution=values, sentence=sentence)
-        if changed == -1:
-            break
+    generated_end_of_sentence = False
+    while not generated_end_of_sentence:
+        generated_end_of_sentence = sample_word(population=population, distribution=values, sentence=sentence)
 
-    return " ".join(sentence[2:-1])
-
-
-# def generate_sentence(population, distribution, length):
-#     sentence = []
-#     for word in range(length):
-#         changed = sample_word(population, distribution, sentence)
-#
-#         if changed == -1:
-#             break
-#
-#     return " ".join(sentence) if sentence else ''
-#
-#
-# def generate_sentences(population, distribution, length, num_sentences):
-#     sentences = []
-#     for i in range(num_sentences):
-#         sentences.append(generate_sentence(population, distribution, length))
-#
-#     return sentences
+    return FILTER_SPECIAL_TOKENS(" ".join(sentence[2:-1]))
 
 
 def print_sentences_probabilities(unigrams):
@@ -127,38 +112,16 @@ def print_sentences_probabilities(unigrams):
 
     for sentence in sentences:
         probability = calculate_probability(unigrams, sentence)
-        print('Probability is', probability, 'sentence:', sentence)
+        logging.info("\tProbability is %d, sentence: \"%s\"", probability, sentence)
 
 
 def build_ngram_model(tokenized_text_array: List[str], n=2):
     assert n >= 2  # Method supports only bigrams or more
     # Build ngram tuples from corpus
     ngrams = zip(*[tokenized_text_array[sub:] for sub in range(n)])
-    ngrams = [tuple(ngram, ) for ngram in ngrams]
-
-    def gen_padded_ngrams():
-        for ngram in ngrams:
-            yield ngram
-
-            # No padding needed
-            if n < 3:
-                continue
-
-            # Handle start of sentence -> we synthesize expanding start of sentence (Pad left)
-            padded = []
-            if ngram[0] == SENTENCE_START:
-                padded += [tuple([SENTENCE_START] * off + list(ngram[1:n - off + 1])) for off in range(2, n)]
-
-            # Pad right
-            if ngram[-1] == SENTENCE_END:
-                padded += [tuple(list(ngram[0:n - off]) + [SENTENCE_END] * off) for off in range(2, n)]
-
-            for padded_ngram in padded:
-                yield padded_ngram
-
     ngram_model = defaultdict(lambda: defaultdict(int))
     # Build model
-    for ngram in gen_padded_ngrams():
+    for ngram in ngrams:
         apriors = tuple([ngram for ngram in ngram[:-1]])
         posterior = ngram[-1]
         ngram_model[apriors][posterior] += 1
@@ -172,52 +135,72 @@ def build_ngram_model(tokenized_text_array: List[str], n=2):
     return ngram_model
 
 
-def generate_sentence_from_xgram(xgrams: Dict[tuple, Dict[str, float]], *start_conditions):
-    sentence = []
-    sentence += start_conditions if start_conditions else [SENTENCE_START]
-    gram = len(sentence)
+def generate_markov_chain_seed(tokens: List[str], ngram_size=2):
+    seed = random.randint(0, len(tokens) - ngram_size)
+    return tokens[seed:seed + ngram_size]
+
+
+def generate_sentence_from_xgram(xgrams: Union[Dict[tuple, Dict[str, float]], Dict[str, float]], tokens: List[str]):
+    first = next(iter(xgrams.keys()))
+    ngram_size = len(first) + 1 if isinstance(first, tuple) else 1
+
+    if ngram_size == 1:
+        # noinspection PyTypeChecker
+        return generate_sentence_from_unigram(xgrams)
+
+    aprior_len, change_watchdog = ngram_size - 1, 0
+
+    # Handle unfortunate random choices where end and start of sentence don't appear one after each other
     while True:
-        last_token = tuple(sentence[-gram:])
-        last_token_xgrams = xgrams[last_token]
+        sentence = generate_markov_chain_seed(tokens, aprior_len)
+        if tuple(sentence) in xgrams:
+            break
+
+    prev_sentence_len, change_watchdog, generated_sentence_end = aprior_len, 0, False
+    while not generated_sentence_end:
+        last_aprior = tuple(sentence[-aprior_len:])
+        last_token_xgrams = xgrams[last_aprior]
         if not last_token_xgrams:
             break
 
         population, distribution = zip(*last_token_xgrams.items())
-        changed = sample_word(population, distribution, sentence)
-        if changed == -1:
-            break
+        generated_sentence_end = sample_word(population, distribution, sentence)
 
-    return " ".join(sentence[2:-1])
+    sentence = " ".join(sentence)
+    return FILTER_SPECIAL_TOKENS(sentence)
 
 
 def main(argv):
-    print("Reading merged file.")
-    speakers_to_speeches = extract_to_map(os.path.join('resources', 'merged.xml'))
+    logging.info("Reading merged file.")
+    speakers_to_speeches \
+        = extract_to_map(os.path.join('resources', 'merged.xml'))
 
-    print("Splitting tokens and sanitizing them.")
+    logging.info("Splitting tokens and sanitizing them.")
     corpus = " ".join(speakers_to_speeches.values())
     tokenized_text_array = re.split('\s+', corpus)
 
-    print("Building unigram model.")
+    logging.info("Building unigram model.")
     unigram_model = build_unigram_model(tokenized_text_array)
-    print("Printint probabilities for inputs")
+    logging.info("Printint probabilities for inputs")
     print_sentences_probabilities(unigram_model)
-    print("Trying to generate sentence from unigram.")
+    logging.info("Trying to generate sentence from unigram.")
     for _ in range(10):
-        print(generate_sentence_from_unigram(unigram_model))
+        logging.info("\t %s", generate_sentence_from_xgram(unigram_model, tokenized_text_array))
 
-    print("Building bigram model.")
+    logging.info("Building bigram model.")
     bigrams_model = build_ngram_model(tokenized_text_array, 2)
-    print("Trying to generate sentence from bigram.")
+    logging.info("Trying to generate sentence from bigram.")
     for _ in range(10):
-        print(generate_sentence_from_xgram(bigrams_model, SENTENCE_START))
+        logging.info("\t %s", generate_sentence_from_xgram(bigrams_model, tokenized_text_array))
 
-    print("Building trigram model.")
+    logging.info("Building trigram model.")
     trigrams_model = build_ngram_model(tokenized_text_array, 3)
-    print("Trying to generate sentence from trigram.")
+    logging.info("Trying to generate sentence from trigram.")
     for _ in range(10):
-        print(generate_sentence_from_xgram(trigrams_model, SENTENCE_START, SENTENCE_START))
+        logging.info("\t %s", generate_sentence_from_xgram(trigrams_model, tokenized_text_array))
 
 
 if __name__ == "__main__":
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
     main(sys.argv)
