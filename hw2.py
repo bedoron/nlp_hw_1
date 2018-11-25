@@ -1,4 +1,6 @@
-import math
+import hashlib
+import itertools
+import logging
 import math
 import os
 import pickle
@@ -10,7 +12,6 @@ from collections import defaultdict
 from functools import wraps
 from typing import Dict, List, Union
 from xml.etree import ElementTree as et
-import logging
 
 logging.basicConfig(format='%(message)s')
 
@@ -18,15 +19,25 @@ CHANGE_WATCHDOG_THRESHOLD = 10
 SENTENCE_START_TOKEN = '<SOS>'
 SENTENCE_END_TOKEN = '<EOS>'
 
-def FILTER_SPECIAL_TOKENS(sentence):
+‎
+def filter_special_tokens(sentence):
     return re.sub('\b?(' + re.escape(SENTENCE_START_TOKEN) + '|' + re.escape(SENTENCE_END_TOKEN) + ')\b?', '', sentence)
+
 
 # TODO: Remove caching before submission
 def with_cache(func):
     @wraps(func)
     def my_func(*args, **kwargs):
-        cache_file = os.path.join('resources', '{}.pcl'.format(func.__name__))
+        cache_file_name = '{}.pcl'.format(func.__name__)
+        if args and isinstance(args[0], list):
+            hash = hashlib.sha256()
+            for i in args[0]:
+                hash.update(i.encode())
+            cache_file_name = hash.hexdigest() + '_' + cache_file_name
+
+        cache_file = os.path.join('resources', cache_file_name)
         if os.path.isfile(cache_file):
+            logging.warning('* Reading for "%s" data from cache file "%s" *', func.__name__, cache_file)
             with open(cache_file, 'rb') as fd:
                 return pickle.load(fd)
 
@@ -47,14 +58,20 @@ def extract_to_map(speaker_file):
         text = doc[1].text
         speaker = doc[0].text
         if text is None:
-            logging.warning('Speaker "{}" had nothing to say', speaker)
+            logging.warning('Speaker "%s" had nothing to say', speaker)
             continue
 
         # Add start/end of sentence tokens
-        text = "\n".join(
-            ["{} {} {}".format(SENTENCE_START_TOKEN, word, SENTENCE_END_TOKEN) for word in text.split("\n")])
+        marked_sentences = ["{} {} {}".format(SENTENCE_START_TOKEN, word, SENTENCE_END_TOKEN) for word in
+                            text.split("\n")]
+        speaker_tokens = itertools.chain.from_iterable(
+            map(lambda sentence: re.split("\s+", sentence), marked_sentences))
 
-        speaker_to_speeches[speaker] = text
+        l = list(speaker_tokens)
+        if not l:
+            continue
+
+        speaker_to_speeches[speaker] = l
 
     return speaker_to_speeches
 
@@ -99,7 +116,7 @@ def generate_sentence_from_unigram(xgrams: Dict[tuple, float]):
     while not generated_end_of_sentence:
         generated_end_of_sentence = sample_word(population=population, distribution=values, sentence=sentence)
 
-    return FILTER_SPECIAL_TOKENS(" ".join(sentence[2:-1]))
+    return filter_special_tokens(" ".join(sentence[2:-1]))
 
 
 def print_sentences_probabilities(unigrams):
@@ -110,9 +127,12 @@ def print_sentences_probabilities(unigrams):
         ' גכג שלום גכקא .',
     ]
 
+    sentences = map(lambda sentence: " ".join([SENTENCE_START_TOKEN, sentence, SENTENCE_END_TOKEN]), sentences)
+
+    logging.info("Printint probabilities for inputs")
     for sentence in sentences:
         probability = calculate_probability(unigrams, sentence)
-        logging.info("\tProbability is %d, sentence: \"%s\"", probability, sentence)
+        logging.info("\tProbability is %s, sentence: \"%s\"", probability, sentence)
 
 
 def build_ngram_model(tokenized_text_array: List[str], n=2):
@@ -167,37 +187,61 @@ def generate_sentence_from_xgram(xgrams: Union[Dict[tuple, Dict[str, float]], Di
         generated_sentence_end = sample_word(population, distribution, sentence)
 
     sentence = " ".join(sentence)
-    return FILTER_SPECIAL_TOKENS(sentence)
+    return filter_special_tokens(sentence)
+
+
+def generate_models(corpus: List[str]):
+    logging.info("Building unigram model.")
+    unigram_model = build_unigram_model(corpus)
+
+    logging.info("Building bigram model.")
+    bigram_model = build_ngram_model(corpus, 2)
+
+    logging.info("Building trigram model.")
+    trigram_model = build_ngram_model(corpus, 3)
+
+    return {'corpus': corpus, 'unigram_model': unigram_model, 'bigram_model': bigram_model,
+            'trigram_model': trigram_model}
+
+
+def generate_sentences(sentences: int, corpus: List[str], unigram_model: Dict[str, float],
+                       bigram_model: Dict[tuple, Dict[str, float]],
+                       trigram_model: Dict[tuple, Dict[str, float]]):
+    logging.info("Trying to generate sentence from unigram.")
+    for _ in range(sentences):
+        logging.info("\t %s", generate_sentence_from_xgram(unigram_model, corpus))
+
+    logging.info("Trying to generate sentence from bigram.")
+    for _ in range(sentences):
+        logging.info("\t %s", generate_sentence_from_xgram(bigram_model, corpus))
+
+    logging.info("Trying to generate sentence from trigram.")
+    for _ in range(sentences):
+        logging.info("\t %s", generate_sentence_from_xgram(trigram_model, corpus))
 
 
 def main(argv):
     logging.info("Reading merged file.")
-    speakers_to_speeches \
-        = extract_to_map(os.path.join('resources', 'merged.xml'))
+    speakers_to_speeches = extract_to_map(os.path.join('resources', 'merged.xml'))
 
     logging.info("Splitting tokens and sanitizing them.")
-    corpus = " ".join(speakers_to_speeches.values())
-    tokenized_text_array = re.split('\s+', corpus)
+    corpus = list(itertools.chain.from_iterable(speakers_to_speeches.values()))
 
-    logging.info("Building unigram model.")
-    unigram_model = build_unigram_model(tokenized_text_array)
-    logging.info("Printint probabilities for inputs")
-    print_sentences_probabilities(unigram_model)
-    logging.info("Trying to generate sentence from unigram.")
-    for _ in range(10):
-        logging.info("\t %s", generate_sentence_from_xgram(unigram_model, tokenized_text_array))
+    models_cache = generate_models(corpus)
+    print_sentences_probabilities(models_cache['unigram_model'])
 
-    logging.info("Building bigram model.")
-    bigrams_model = build_ngram_model(tokenized_text_array, 2)
-    logging.info("Trying to generate sentence from bigram.")
-    for _ in range(10):
-        logging.info("\t %s", generate_sentence_from_xgram(bigrams_model, tokenized_text_array))
+    generate_sentences(sentences=10, **models_cache)
 
-    logging.info("Building trigram model.")
-    trigrams_model = build_ngram_model(tokenized_text_array, 3)
-    logging.info("Trying to generate sentence from trigram.")
-    for _ in range(10):
-        logging.info("\t %s", generate_sentence_from_xgram(trigrams_model, tokenized_text_array))
+    top_speakers = sorted(speakers_to_speeches.items(), key=lambda pair: len(pair[1]), reverse=True)[:5]
+
+    logging.info("Top speakers: ")
+    for speaker_stats in map(lambda pair: "{} - {}".format(pair[0], len(pair[1])), top_speakers):
+        logging.info("\t%s", speaker_stats)
+
+    for top_speaker, tokens in top_speakers:
+        logging.info("**** Generating text for \"%s\" ****", top_speaker)
+        models_cache = generate_models(tokens)
+        generate_sentences(sentences=3, **models_cache)
 
 
 if __name__ == "__main__":
