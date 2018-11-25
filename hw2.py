@@ -19,7 +19,7 @@ CHANGE_WATCHDOG_THRESHOLD = 10
 SENTENCE_START_TOKEN = '<SOS>'
 SENTENCE_END_TOKEN = '<EOS>'
 
-‎
+
 def filter_special_tokens(sentence):
     return re.sub('\b?(' + re.escape(SENTENCE_START_TOKEN) + '|' + re.escape(SENTENCE_END_TOKEN) + ')\b?', '', sentence)
 
@@ -207,22 +207,29 @@ def generate_models(corpus: List[str]):
 def generate_sentences(sentences: int, corpus: List[str], unigram_model: Dict[str, float],
                        bigram_model: Dict[tuple, Dict[str, float]],
                        trigram_model: Dict[tuple, Dict[str, float]]):
+    generated = {'from_unigrams': [], 'from_bigrams': [], 'from_trigrams': []}
+
     logging.info("Trying to generate sentence from unigram.")
     for _ in range(sentences):
-        logging.info("\t %s", generate_sentence_from_xgram(unigram_model, corpus))
+        generated['from_unigrams'].append(generate_sentence_from_xgram(unigram_model, corpus))
+        logging.info("\t %s", generated['from_unigrams'][-1])
 
     logging.info("Trying to generate sentence from bigram.")
     for _ in range(sentences):
-        logging.info("\t %s", generate_sentence_from_xgram(bigram_model, corpus))
+        generated['from_bigrams'].append(generate_sentence_from_xgram(bigram_model, corpus))
+        logging.info("\t %s", generated['from_bigrams'][-1])
 
     logging.info("Trying to generate sentence from trigram.")
     for _ in range(sentences):
-        logging.info("\t %s", generate_sentence_from_xgram(trigram_model, corpus))
+        generated['from_trigrams'].append(generate_sentence_from_xgram(trigram_model, corpus))
+        logging.info("\t %s", generated['from_trigrams'][-1])
+
+    return generated
 
 
-def main(argv):
+def main(source_file):
     logging.info("Reading merged file.")
-    speakers_to_speeches = extract_to_map(os.path.join('resources', 'merged.xml'))
+    speakers_to_speeches = extract_to_map(source_file)
 
     logging.info("Splitting tokens and sanitizing them.")
     corpus = list(itertools.chain.from_iterable(speakers_to_speeches.values()))
@@ -230,7 +237,7 @@ def main(argv):
     models_cache = generate_models(corpus)
     print_sentences_probabilities(models_cache['unigram_model'])
 
-    generate_sentences(sentences=10, **models_cache)
+    generated_from_entire_corpus = generate_sentences(sentences=5, **models_cache)
 
     top_speakers = sorted(speakers_to_speeches.items(), key=lambda pair: len(pair[1]), reverse=True)[:5]
 
@@ -238,13 +245,25 @@ def main(argv):
     for speaker_stats in map(lambda pair: "{} - {}".format(pair[0], len(pair[1])), top_speakers):
         logging.info("\t%s", speaker_stats)
 
+    top_speaker_generated = None
     for top_speaker, tokens in top_speakers:
         logging.info("**** Generating text for \"%s\" ****", top_speaker)
         models_cache = generate_models(tokens)
-        generate_sentences(sentences=3, **models_cache)
+        speaker_generated = generate_sentences(sentences=5, **models_cache)
+        top_speaker_generated = speaker_generated if top_speaker_generated is None else top_speaker_generated
+
+    # Print the required output as described in HW file:
+    print("Bigrams model from all data:")
+    print("\n".join(generated_from_entire_corpus['from_bigrams'][:3]))
+
+    print("Trigrams model from all data:")
+    print("\n".join(generated_from_entire_corpus['from_trigrams'][:3]))
+
+    print("Trigrams model from top speaker:")
+    print("\n".join(top_speaker_generated['from_trigrams'][:3]))
 
 
 if __name__ == "__main__":
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
-    main(sys.argv)
+    logger.setLevel(logging.INFO)  # Change to info/fatal as needed
+    main(*sys.argv[1:])
