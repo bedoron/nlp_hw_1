@@ -3,6 +3,7 @@
 
 venv/
 venv_cm/
+venv_37/
 
 # User-specific stuff
 .idea/**/workspace.xml
