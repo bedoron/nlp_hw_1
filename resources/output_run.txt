@@ -1,0 +1,19 @@
+C:\Users\bedor\workspace\nlp_hw_1\venv_37\Scripts\python.exe C:/Users/bedor/workspace/nlp_hw_1/hw3.py
+Edelstein sentences: 98562 Rivlin sentences: 246640
+Edelstein sentences: 98562 Rivlin sentences: 98562
+Cross validating with multinomialnb
+multinomialnb scores:
+	precision : 0.55 (+/- 0.05)
+	f1        : 0.43 (+/- 0.06)
+	accuracy  : 0.53 (+/- 0.03)
+Cross validating with decisiontreeclassifier
+decisiontreeclassifier scores:
+	precision : 0.59 (+/- 0.04)
+	f1        : 0.66 (+/- 0.07)
+	accuracy  : 0.61 (+/- 0.05)
+Cross validating with kneighborsclassifier
+kneighborsclassifier scores:
+	precision : 0.61 (+/- 0.10)
+	f1        : 0.13 (+/- 0.06)
+	accuracy  : 0.51 (+/- 0.02)
+Whoa!
