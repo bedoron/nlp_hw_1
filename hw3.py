@@ -45,6 +45,10 @@ class HW3FeatureFinder(TransformerMixin, metaclass=ABCMeta):
         transform = self.transform(X)
         return transform
 
+    def fit(self, X, y=None, **fit_params):
+        # transform = self.transform(X)
+        return self
+
     @abstractmethod
     def _generate_feature_vector(self, sentence: str):
         pass
@@ -147,10 +151,10 @@ def main():
     X, y = get_even_samples(limit=LIMIT, rivlin_path=RIVLIN_SOURCE_LOCATION, edelstein_path=EDELSTEIN_SOURCE_LOCATION)
     top_100_file_location = os.path.join('resources', 'hebrew top 100.txt')
 
-    # question_one_two(top_100_file_location, X, y)
+    question_one_two(top_100_file_location, X, y)
     question_three(X, y)
 
-    # question_four(X, y)
+    question_four(X, y)
     print('Whoa!')
 
 
@@ -165,7 +169,7 @@ def question_one_two(top_100_file_path, X, y):
 
 def check_scores(feature_extractor, X: np.ndarray, y: np.ndarray):
     pipeline = make_pipeline(feature_extractor)
-    calculate_all_accuracies(pipeline, X, y)
+    calculate_all_accuracies(X, y, pipeline)
 
 
 def question_three(X: np.ndarray, y: np.ndarray):
