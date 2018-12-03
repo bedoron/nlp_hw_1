@@ -17,3 +17,87 @@ kneighborsclassifier scores:
 	f1        : 0.13 (+/- 0.06)
 	accuracy  : 0.51 (+/- 0.02)
 Whoa!
+
+-------------
+/Users/dbenelaz/pws/nlp_hw_1/venv_37/bin/python /Users/dbenelaz/pws/nlp_hw_1/hw3.py
+Read - Edelstein sentences: 98562 Rivlin sentences: 246640
+Limit was set to 10000 sentences per speaker
+**** MY FEATURE VECTOR ****
+Handling transformfeaturevector
+	Naive Bayes: 0.63 (+/- 0.10)
+	DecisionTree: 0.63 (+/- 0.09)
+	KNN: 0.56 (+/- 0.08)
+**** HEBREW TOP 100 ****
+Handling transformhebrewtopfeaturevector
+	Naive Bayes: 0.54 (+/- 0.07)
+	DecisionTree: 0.60 (+/- 0.06)
+	KNN: 0.51 (+/- 0.02)
+**** Using count vectorizer with tf-idf ****
+Amount of features: 18950
+Handling countvectorizer->tfidftransformer
+	Naive Bayes: 0.73 (+/- 0.15)
+	DecisionTree: 0.71 (+/- 0.10)
+	KNN: 0.69 (+/- 0.11)
+**** Using KBest ****
+Better vocab: ['2013', '2014', 'אבל', 'אומר', 'אני', 'אשר', 'את', 'אתה', 'בבקשה', 'בעד', 'בעמוד', 'גברתי', 'ההסתייגות', 'הוא', 'הוועדה', 'היה', 'הכנסת', 'הסתייגות', 'התקבל', 'התקבלה', 'זאת', 'זה', 'חברת', 'יכול', 'כאשר', 'כבוד', 'כל', 'כנוסח', 'לא', 'לבוא', 'להיות', 'לו', 'לומר', 'לחבר', 'לחברת', 'לחלופין', 'לך', 'נגד', 'נמנע', 'סעיף', 'על', 'פה', 'צריך', 'קבוצת', 'רבה', 'רבותי', 'רוצה', 'רק', 'שהוא', 'תודה']
+Handling countvectorizer->selectkbest
+	Naive Bayes: 0.65 (+/- 0.09)
+	DecisionTree: 0.65 (+/- 0.09)
+	KNN: 0.62 (+/- 0.11)
+Handling countvectorizer
+	Naive Bayes: 0.67 (+/- 0.10)
+	DecisionTree: 0.66 (+/- 0.10)
+	KNN: 0.62 (+/- 0.07)
+(20000, 50)
+Whoa!
+===========================================================
+step 1 (my features):
+
+- Naive Bayes: 0.60 (+/- 0.01)
+- DecisionTree: 0.61 (+/- 0.01)
+- KNN: 0.57 (+/- 0.02)
+
+Step2 (top Hebrew words):
+
+- Naive Bayes: 0.53 (+/- 0.02)
+- DecisionTree: 0.60 (+/- 0.01)
+- KNN: 0.51 (+/- 0.01)
+
+Step3 (bag-of-words):
+
+- Naive Bayes: 0.73 (+/- 0.02)
+- DecisionTree: 0.70 (+/- 0.01)
+- KNN: 0.68 (+/- 0.02)
+
+Step4 (selected best features):
+
+- Naive Bayes: 0.64 (+/- 0.02)
+- DecisionTree: 0.64 (+/- 0.02)
+- KNN: 0.61 (+/- 0.02)
+- Naive Bayes: 0.64 (+/- 0.02)
+- DecisionTree: 0.64 (+/- 0.02)
+- KNN: 0.61 (+/- 0.03)
+Whoa!=========================================================
+step 1 (my features):
+
+- Naive Bayes: 0.60 (+/- 0.03)
+- DecisionTree: 0.62 (+/- 0.02)
+- KNN: 0.58 (+/- 0.02)
+
+Step2 (top Hebrew words):
+
+- Naive Bayes: 0.52 (+/- 0.02)
+- DecisionTree: 0.59 (+/- 0.02)
+- KNN: 0.51 (+/- 0.01)
+
+Step3 (bag-of-words):
+
+- Naive Bayes: 0.73 (+/- 0.02)
+- DecisionTree: 0.70 (+/- 0.03)
+- KNN: 0.63 (+/- 0.05)
+
+Step4 (selected best features):
+
+- Naive Bayes: 0.65 (+/- 0.02)
+- DecisionTree: 0.65 (+/- 0.02)
+- KNN: 0.60 (+/- 0.03)

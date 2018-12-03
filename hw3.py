@@ -163,9 +163,6 @@ def question_four(X: np.ndarray, y: np.ndarray, output_file_name):
     with open(output_file_name, 'w', encoding="UTF-8") as f:
         f.write("\n".join(new_vocab))
 
-    better_pipeline = make_pipeline_classifiers(lambda _: [CountVectorizer(), SelectKBest(k=50)])
-    calculate_all_accuracies(X, y, better_pipeline)
-
     better_pipeline = make_pipeline_classifiers(lambda _: [CountVectorizer(vocabulary=new_vocab)])
     calculate_all_accuracies(X, y, better_pipeline)
 
@@ -196,7 +193,6 @@ def main(args):
     question_three(X, y)
 
     question_four(X, y, best_words_file_output_path)
-    print('Whoa!')
 
 
 if __name__ == "__main__":
