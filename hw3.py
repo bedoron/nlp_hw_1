@@ -1,6 +1,8 @@
 import os
 import random
 import re
+import sys
+from typing import List
 
 import numpy as np
 from sklearn.base import TransformerMixin
@@ -8,7 +10,6 @@ from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.feature_selection import SelectKBest
 from sklearn.model_selection import cross_validate
 from sklearn.pipeline import Pipeline, make_pipeline
-from sklearn.svm import SVC
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -17,19 +18,7 @@ from abc import ABCMeta, abstractmethod
 # Set this parameter to None to load the maximal amount of sentences, otherwise, LIMIT amount of sentences will be
 # loaded per speaker
 LIMIT = 10000
-
-RVLN = 'rivlin'
-ESTN = 'edelstein'
-
-TO = {
-    RVLN: 0,
-    ESTN: 1
-}
-
-FROM = [RVLN, ESTN]
-
-EDELSTEIN_SOURCE_LOCATION = os.path.join('resources', ESTN)
-RIVLIN_SOURCE_LOCATION = os.path.join('resources', RVLN)
+K_BEST = 50
 
 
 class HW3FeatureFinder(TransformerMixin, metaclass=ABCMeta):
@@ -94,28 +83,23 @@ class TransformHebrewTopFeatureVector(HW3FeatureFinder):
         self._word_to_index = {k: v for v, k in enumerate(self._top_words)}
 
 
-def get_even_samples(rivlin_path, edelstein_path, limit=None):
-    edelstein = read_speaker_sentences(edelstein_path)
-    rivlin = read_speaker_sentences(rivlin_path)
+def get_even_samples(input_dir1, input_dir2, limit=None):
+    speaker1 = read_speaker_sentences(input_dir1)
+    speaker2 = read_speaker_sentences(input_dir2)
     # Down sample ...
-    edelstein_sentences, rivlin_sentences = len(edelstein), len(rivlin)
-    print("Read - Edelstein sentences:", edelstein_sentences, "Rivlin sentences:", rivlin_sentences)
-    rivlin = random.choices(rivlin, k=edelstein_sentences)
+    speaker1_sentences, speaker2_sentences = len(speaker1), len(speaker2)
 
-    rivlin = np.char.array(rivlin, unicode=True)
-    edelstein = np.char.array(edelstein, unicode=True)
+    limit = min(speaker1_sentences, speaker2_sentences) if limit is None else limit
 
-    if limit and limit < edelstein_sentences:
-        print("Limit was set to", limit, "sentences per speaker")
-        rivlin = rivlin[:limit]
-        edelstein = edelstein[:limit]
-        edelstein_sentences = limit
-    else:
-        print("Using - Edelstein sentences:", edelstein_sentences, "Rivlin sentences:", len(rivlin))
+    speaker1 = random.choices(speaker1, k=limit)
+    speaker2 = random.choices(speaker2, k=limit)
 
-    X = np.concatenate((rivlin, edelstein))
-    y = np.zeros((edelstein_sentences * 2,))
-    y[edelstein_sentences:] = TO[ESTN]
+    speaker1 = np.char.array(speaker1, unicode=True)
+    speaker2 = np.char.array(speaker2, unicode=True)
+
+    X = np.concatenate((speaker1, speaker2))
+    y = np.zeros((X.shape[0],))
+    y[limit:] = 1
 
     return X, y
 
@@ -130,7 +114,7 @@ def read_speaker_sentences(speakre_db_path: str) -> list:
     return speaker_samples
 
 
-def handle_pipeline(pipeline: Pipeline, X: np.ndarray, y: np.ndarray):
+def handle_pipeline(X: np.ndarray, y: np.ndarray, pipeline: Pipeline):
     names = {'multinomialnb': 'Naive Bayes', 'decisiontreeclassifier': 'DecisionTree', 'svm': 'SVM',
              'kneighborsclassifier': 'KNN'}
     # scoring = ['precision', 'f1', 'accuracy']
@@ -140,78 +124,80 @@ def handle_pipeline(pipeline: Pipeline, X: np.ndarray, y: np.ndarray):
 
     for score_type in scoring:
         score_entry = 'test_{}'.format(score_type)
-        print("\t%s%s: %0.2f (+/- %0.2f)" % (
+        print("- %s%s: %0.2f (+/- %0.2f)" % (
             '', classifier_name, scores[score_entry].mean(), scores[score_entry].std() * 2))
 
     # score_time and fit_time were left out
     return scores
 
 
-def main():
-    X, y = get_even_samples(limit=LIMIT, rivlin_path=RIVLIN_SOURCE_LOCATION, edelstein_path=EDELSTEIN_SOURCE_LOCATION)
-    top_100_file_location = os.path.join('resources', 'hebrew top 100.txt')
-
-    question_one_two(top_100_file_location, X, y)
-    question_three(X, y)
-
-    question_four(X, y)
-    print('Whoa!')
-
-
 def question_one_two(top_100_file_path, X, y):
-    print("**** MY FEATURE VECTOR ****")
-    tfv = TransformFeatureVector()
-    check_scores(tfv, X, y)
-    print("**** HEBREW TOP 100 ****")
-    thtfv = TransformHebrewTopFeatureVector(top_100_file_path)
-    check_scores(thtfv, X, y)
+    print("step 1 (my features):\n")
+    pipelines = make_pipeline_classifiers(lambda _: [TransformFeatureVector()])
+    calculate_all_accuracies(X, y, pipelines)
 
-
-def check_scores(feature_extractor, X: np.ndarray, y: np.ndarray):
-    pipeline = make_pipeline(feature_extractor)
-    calculate_all_accuracies(X, y, pipeline)
+    print("\nStep2 (top Hebrew words):\n")
+    pipelines = make_pipeline_classifiers(lambda _: [TransformHebrewTopFeatureVector(top_100_file_path)])
+    calculate_all_accuracies(X, y, pipelines)
 
 
 def question_three(X: np.ndarray, y: np.ndarray):
-    print("**** Using count vectorizer with tf-idf ****")
+    print("\nStep3 (bag-of-words):\n")
     vectorizer = CountVectorizer()
     vectorizer.fit_transform(X.tolist())
-    print("Amount of features:", len(vectorizer.get_feature_names()))
-    pipeline = make_pipeline(vectorizer, TfidfTransformer(use_idf=False))
-    calculate_all_accuracies(X, y, pipeline)
+
+    pipelines = make_pipeline_classifiers(lambda _: [vectorizer, TfidfTransformer(use_idf=False)])
+    calculate_all_accuracies(X, y, pipelines)
 
 
-def question_four(X: np.ndarray, y: np.ndarray):
-    print("**** Using KBest ****")
+def question_four(X: np.ndarray, y: np.ndarray, output_file_name):
+    print("\nStep4 (selected best features):\n")
 
     vectorizer = CountVectorizer()
     X_as_matrix = vectorizer.fit_transform(X.tolist())
-    selector = SelectKBest(k=50)
+    selector = SelectKBest(k=K_BEST)
     X_new = selector.fit_transform(X_as_matrix, y)
     selected_features = selector.get_support()
     new_vocab = np.asarray(vectorizer.get_feature_names())[selected_features].tolist()
 
-    print("Better vocab:", new_vocab)
+    with open(output_file_name, 'w', encoding="UTF-8") as f:
+        f.write("\n".join(new_vocab))
 
-    better_pipeline = make_pipeline(CountVectorizer(), SelectKBest(k=50))
+    better_pipeline = make_pipeline_classifiers(lambda _: [CountVectorizer(), SelectKBest(k=50)])
     calculate_all_accuracies(X, y, better_pipeline)
 
-    better_pipeline = make_pipeline(CountVectorizer(vocabulary=new_vocab))
+    better_pipeline = make_pipeline_classifiers(lambda _: [CountVectorizer(vocabulary=new_vocab)])
     calculate_all_accuracies(X, y, better_pipeline)
 
-    print(X_new.shape)
+
+def calculate_all_accuracies(X, y, feature_extractor_pipeline: List):
+    for pipeline in feature_extractor_pipeline:
+        handle_pipeline(X, y, pipeline)
 
 
-def calculate_all_accuracies(X, y, feature_extractor_pipeline):
-    print("Handling", "->".join([step[0] for step in feature_extractor_pipeline.steps]))
-
+# The producer makes sure that we don't share data by accident
+def make_pipeline_classifiers(stages_producer):
+    stages = stages_producer(None)  # Type: list
     pipelines = []
     for clasifier in [MultinomialNB(), DecisionTreeClassifier(), KNeighborsClassifier(), ]:  # SVC(gamma='auto')]:
-        pipelines += make_pipeline(feature_extractor_pipeline, clasifier),
+        stages_list = list(stages)
+        stages_list.append(clasifier)
+        pipelines.append(make_pipeline(*stages_list))
 
-    for pipeline in pipelines:
-        handle_pipeline(pipeline, X, y)
+    return pipelines
+
+
+def main(args):
+    input_dir1, input_dir2, top_hebrew_words, best_words_file_output_path = args[1], args[2], args[3], args[4]
+
+    X, y = get_even_samples(limit=LIMIT, input_dir1=input_dir1, input_dir2=input_dir2)
+
+    question_one_two(top_hebrew_words, X, y)
+    question_three(X, y)
+
+    question_four(X, y, best_words_file_output_path)
+    print('Whoa!')
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv)
