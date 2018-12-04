@@ -48,7 +48,7 @@ class TransformFeatureVector(HW3FeatureFinder):
         return [
             1 if 'הסתייגות' in sentence else 0,
             1 if 'כבוד' in sentence else 0,
-            1 if 'רבותיי' in sentence else 0,  # The joke about rivlin from eretz nehederet
+            1 if 'רבותי' in sentence else 0,  # The joke about rivlin from eretz nehederet
             len(sentence.split()),
             1 if 'תודה' in sentence else 0,
             1 if 'חבר' in sentence else 0,
@@ -124,8 +124,7 @@ def handle_pipeline(X: np.ndarray, y: np.ndarray, pipeline: Pipeline):
 
     for score_type in scoring:
         score_entry = 'test_{}'.format(score_type)
-        print("- %s%s: %0.2f (+/- %0.2f)" % (
-            '', classifier_name, scores[score_entry].mean(), scores[score_entry].std() * 2))
+        print("- {}: {:0.2f}%".format(classifier_name, np.average(scores[score_entry])*100))
 
     # score_time and fit_time were left out
     return scores

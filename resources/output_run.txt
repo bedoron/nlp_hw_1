@@ -101,3 +101,27 @@ Step4 (selected best features):
 - Naive Bayes: 0.65 (+/- 0.02)
 - DecisionTree: 0.65 (+/- 0.02)
 - KNN: 0.60 (+/- 0.03)
+=================================================================
+step 1 (my features):
+
+- Naive Bayes: 60.24%
+- DecisionTree: 62.08%
+- KNN: 55.57%
+
+Step2 (top Hebrew words):
+
+- Naive Bayes: 52.04%
+- DecisionTree: 59.23%
+- KNN: 51.43%
+
+Step3 (bag-of-words):
+
+- Naive Bayes: 72.75%
+- DecisionTree: 70.27%
+- KNN: 64.77%
+
+Step4 (selected best features):
+
+- Naive Bayes: 63.84%
+- DecisionTree: 63.78%
+- KNN: 61.11%
