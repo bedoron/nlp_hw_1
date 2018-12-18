@@ -1,0 +1,3 @@
+accuracy a: 67.27%
+accuracy b: 65.18%
+accuracy c: 62.57%

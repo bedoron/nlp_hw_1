@@ -111,9 +111,15 @@ def classify_speakers(X: np.ndarray, y: np.ndarray, word2vec_model: Word2VecKeye
         return weight
 
     def embedding_mean(words_vector: np.ndarray):
+        thresh = 0.8
         mean_vect = words_vector.mean(axis=0)
 
-        weights = 1 - np.dot(words_vector, mean_vect)
+        normalized_mean_vect = mean_vect / np.linalg.norm(mean_vect)
+        normalized_words_vector = (words_vector.T / np.linalg.norm(words_vector, axis=1)).T
+
+        weights = np.dot(normalized_words_vector, normalized_mean_vect)
+        weights[weights >= thresh] = 1
+        weights[weights < thresh] = 0.1
         return weights
 
     results = OrderedDict()
@@ -121,13 +127,15 @@ def classify_speakers(X: np.ndarray, y: np.ndarray, word2vec_model: Word2VecKeye
     results['b'] = handle_pipeline_weights_algorithm(word2vec_model, X, y, heavy_prefix)
     results['c'] = handle_pipeline_weights_algorithm(word2vec_model, X, y, embedding_mean)
 
+    formatted_result = []
     for experiment, accuracy in results.items():
-        print("accuracy {}: {:0.2f}%".format(experiment, accuracy))
+        formatted_result.append("accuracy {}: {:0.2f}%".format(experiment, accuracy))
+
+    return formatted_result
 
 
 def handle_pipeline_weights_algorithm(word2vec_model, X, y, naive_weights):
     naive_pipeline = make_pipeline(HW4Word2Vec(word2vec_model, naive_weights), LogisticRegression())
-    print("Cross validating with naive pipeline")
     scores = cross_validate(naive_pipeline, X, y, cv=10, return_train_score=False, scoring=['accuracy'])
     return np.average(scores['test_accuracy']) * 100
 
@@ -139,7 +147,12 @@ def main(speaker_1_dir, speaker_2_dir, word2vec, output_file):
     word2vec_model = KeyedVectors.load_word2vec_format(word2vec, binary=False)
 
     # distance_of_10_pairs_of_words(X, word2vec_model)
-    classify_speakers(X, y, word2vec_model)
+    formatted_result = classify_speakers(X, y, word2vec_model)
+    formatted_result = "\n".join(formatted_result)
+    print(formatted_result)
+
+    with open(output_file, 'w') as fd:
+        fd.write(formatted_result)
 
 
 if __name__ == "__main__":
