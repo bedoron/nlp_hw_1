@@ -110,9 +110,16 @@ def classify_speakers(X: np.ndarray, y: np.ndarray, word2vec_model: Word2VecKeye
 
         return weight
 
+    def embedding_mean(words_vector: np.ndarray):
+        mean_vect = words_vector.mean(axis=0)
+
+        weights = 1 - np.dot(words_vector, mean_vect)
+        return weights
+
     results = OrderedDict()
     results['a'] = handle_pipeline_weights_algorithm(word2vec_model, X, y, naive_weights)
     results['b'] = handle_pipeline_weights_algorithm(word2vec_model, X, y, heavy_prefix)
+    results['c'] = handle_pipeline_weights_algorithm(word2vec_model, X, y, embedding_mean)
 
     for experiment, accuracy in results.items():
         print("accuracy {}: {:0.2f}%".format(experiment, accuracy))
